@@ -58,12 +58,6 @@ const Histogram: React.FC<PropsType> = (props) => {
   }, [stateData, nBins])
 
 
-
-
-
-
-
-
   // A function that builds the graph for a specific value of bin
   var updateGraph = (nBin: number) => {
 
@@ -108,7 +102,7 @@ const Histogram: React.FC<PropsType> = (props) => {
 
   }
 
-
+  // A function that builds the graph for a specific value of bin
   var setupGraph = () => {
 
 
