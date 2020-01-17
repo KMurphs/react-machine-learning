@@ -5,6 +5,7 @@ import * as _jStat from 'jStat';
 
 import './App.css';
 import TestHistogram from './Components/Histogram/TestHistogram';
+import TestDrawingBoard from './Components/DrawingBoard/TestDrawingBoard';
 
 // https://stackoverflow.com/questions/53557919/call-external-javascript-function-from-react-typescript-components
 // https://github.com/Microsoft/TypeScript/issues/21344
@@ -32,6 +33,7 @@ const App: React.FC = () => {
         Hello from header
       </header>
       <TestHistogram />
+      <TestDrawingBoard />
     </div>
   );
 }
