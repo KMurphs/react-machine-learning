@@ -40,13 +40,13 @@ const App: React.FC = () => {
 
     let interval: any;
     if(newChunkStart <= data.length){
-      // interval = setInterval(()=>{
+      interval = setInterval(()=>{
         setNewChunkStart((newChunkStart: number) => {
           console.log('Tick', newChunkStart)
           const nextChunkStart = newChunkStart + chunkLength;
           return nextChunkStart;
         })
-      // }, 1000);
+      }, 1000);
     }
 
     return ()=>{clearInterval(interval)}

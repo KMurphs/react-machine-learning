@@ -10,9 +10,6 @@ type PropsType = {
 }
 
 
-  // set the dimensions and margins of the graph
-  
-
 
 
 // https://www.d3-graph-gallery.com/graph/histogram_basic.html
@@ -22,17 +19,18 @@ const Histogram: React.FC<PropsType> = (props) => {
   const idRef = React.createRef<HTMLDivElement>();
   const [lastProps, setLastProps] = useState<PropsType>(props);
   const [stateData, setStateData] = useState<dataPoint[]>([]);
+  const [nBins, setNBins] = useState<number>(20);
 
 
   const marginRef = useRef({top: 10, right: 30, bottom: 30, left: 40});
   const widthRef = useRef(460 - marginRef.current.left - marginRef.current.right);
   const heighthRef = useRef(460 - marginRef.current.top - marginRef.current.bottom);
 
-
-  let xAxisRef = useRef<d3.ScaleLinear<number, number>>();
-  let yAxisRef = useRef<d3.ScaleLinear<number, number>>();
-  let histogramRef = useRef<d3.HistogramGeneratorNumber<number, number>>();
-  let svgRef = useRef<any>();
+  let xAxisRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined>>();
+  let xScaleRef = useRef<d3.ScaleLinear<number, number>>();
+  let yAxisRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined>>();
+  let yScaleRef = useRef<d3.ScaleLinear<number, number>>();
+  let svgRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined>>();
 
   if(JSON.stringify(lastProps) !== JSON.stringify(props)){
     
@@ -51,94 +49,106 @@ const Histogram: React.FC<PropsType> = (props) => {
   useEffect(()=>{
     console.log(idRef.current);
 
-    // append the svg object to the body of the page
-    svgRef.current = window.d3.select(idRef.current)
-                              .append("svg")
-                                  .attr("width", widthRef.current + marginRef.current .left + marginRef.current .right)
-                                  .attr("height", heighthRef.current  + marginRef.current .top + marginRef.current .bottom)
-                              .append("g")
-                                .attr("transform", "translate(" + marginRef.current.left + "," + marginRef.current.top + ")");
+    !(svgRef.current) && setupGraph();
+
+    // Initialize with 20 bins
+    (svgRef.current) && updateGraph(nBins)
 
 
-    // X axis: scale and draw:
-    xAxisRef.current = d3.scaleLinear()
-                      .domain([0, 1000])     
-                      .range([0, widthRef.current]);
+  }, [stateData, nBins])
 
-    svgRef.current.append("g")
-                    .attr("transform", "translate(0," + heighthRef.current + ")")
-                    .call(d3.axisBottom(xAxisRef.current));
 
-    // Y axis: scale and draw:
-    yAxisRef.current = d3.scaleLinear()
-                        .domain([0, 1000])
-                        .range([heighthRef.current, 0]);
 
-    svgRef.current.append("g")
-                  .call(d3.axisLeft(yAxisRef.current));     
 
+
+
+
+
+  // A function that builds the graph for a specific value of bin
+  var updateGraph = (nBin: number) => {
 
     // set the parameters for the histogram
-    histogramRef.current = d3.histogram()
-                              .value((d: any) => { return d.price; })   // I need to give the vector of value
-                              .domain(xAxisRef.current.domain() as any)       // then the domain of the graphic
-                              .thresholds(xAxisRef.current.ticks(70));        // then the numbers of bins
-  }, [])
+    var histogram = d3.histogram()
+                        .value(function(d:any) { return d.price; })   // I need to give the vector of value
+                        .domain( (xScaleRef.current && xScaleRef.current.domain()) as [number, number])  // then the domain of the graphic
+                        .thresholds( (xScaleRef.current && xScaleRef.current.ticks(nBin)) as number[]); // then the numbers of bins
+
+    // And apply this function to data to get the bins
+    var bins = histogram(stateData as unknown as Array<number>);
 
 
+
+    // Y axis: update now that we know the domain
+    yScaleRef.current && yScaleRef.current.domain([0, d3.max(bins, function(d:any) { return d.length; })]);   // d3.hist has to be called before the Y axis obviously
+    yScaleRef.current && yAxisRef.current && yAxisRef.current.transition()
+                                                      .duration(1000)
+                                                      .call(d3.axisLeft(yScaleRef.current));
+
+    // Join the rect with the bins data
+    var joins:d3.Selection<d3.BaseType, d3.Bin<number, number>, SVGGElement, unknown> | undefined | undefined 
+    joins = svgRef.current && svgRef.current.selectAll("rect")
+                                            .data(bins)
+
+    // Manage the existing bars and eventually the new ones:
+    joins && joins.enter()
+                  .append("rect") // Add a new rect for each new elements
+                  .merge(joins as any) // get the already existing elements as well
+                  .transition() // and apply changes to all of them
+                  .duration(1000)
+                    .attr("x", 1)
+                    .attr("transform", (d:any)=>"translate(" + (xScaleRef.current ? xScaleRef.current(d.x0) : 0) + "," + (yScaleRef.current ? yScaleRef.current(d.length) : 0) + ")")
+                    .attr("width",  (d:any)=> (xScaleRef.current ? xScaleRef.current(d.x1) : 20) - (xScaleRef.current ? xScaleRef.current(d.x0) : 0) - 1)
+                    .attr("height", (d:any)=> heighthRef.current - (yScaleRef.current ? yScaleRef.current(d.length) : 0))
+                    .style("fill", "#69b3a2")
+
+
+    // If less bar in the new histogram, I delete the ones not in use anymore
+    joins && joins.exit()
+                  .remove()
+
+  }
+
+
+  var setupGraph = () => {
+
+
+
+    // append the svg object to the body of the page
+    !(svgRef.current) && (svgRef.current = d3.select(idRef.current)
+                                              .append("svg")
+                                                .attr("width", widthRef.current + marginRef.current.left + marginRef.current.right)
+                                                .attr("height", heighthRef.current + marginRef.current.top + marginRef.current.bottom)
+                                              .append("g")
+                                                .attr("transform",
+                                                      "translate(" + marginRef.current.left + "," + marginRef.current.top + ")"));
   
-  useEffect(()=>{
-
-    console.log('RePlotting...', stateData);
-
-    if(histogramRef.current){
-                              
-      // And apply this function to data to get the bins
-      var bins = histogramRef.current(stateData as any);
-      console.log(bins);
-
-      // xAxis.domain([0, d3.max(stateData, (d: any) => { return d.price; })]);   // d3.hist has to be called before the Y axis obviously
-      yAxisRef.current && yAxisRef.current.domain([0, d3.max(bins, (d: any) => { return d.length; })]);   // d3.hist has to be called before the Y axis obviously
-
-      console.log(yAxisRef.current && yAxisRef.current.domain())
-      console.log(yAxisRef.current && yAxisRef.current)
-
-      // append the bar rectangles to the svg element
-      let joins = svgRef.current.selectAll("rect")
-                                .data(bins);
-
-
-
-
-      let newJoins = joins.enter()
-                                    .append("rect")
-                                      .attr("x", 1)
-                                      .attr("transform", (d: any) => "translate(" + (xAxisRef.current && xAxisRef.current(d.x0)) + "," + (yAxisRef.current && yAxisRef.current(d.length)) + ")")
-                                      .attr("width", (d: any)=> (xAxisRef.current && (xAxisRef.current(d.x1) - xAxisRef.current(d.x0) -1)))
-                                      .attr("height", (d: any)=> {console.log(d, d.length, heighthRef.current, yAxisRef.current); return heighthRef.current - (yAxisRef.current ? yAxisRef.current(d.length) : 0)})
-                                      .style("fill", "#69b3a2")
-                          .merge(joins);//.transition().duration(500);
-      console.log(joins)
-      console.log(newJoins)
-      // newJoins.merge(joins);//.transition().duration(500);
-      console.log(joins)
-      console.log(newJoins)
-
-
-
-      console.log(joins)
-      joins.exit()
-           .remove();
-      console.log(joins)
-    }
-
-    return ()=>{}
-  }, [stateData]);
+    // X axis: scale and draw:
+    xScaleRef.current = d3.scaleLinear()
+                          .domain([0, 1000])     // can use this instead of 1000 to have the max of data: d3.max(data, function(d) { return +d.price })
+                          .range([0, widthRef.current]);
+    
+    svgRef.current && svgRef.current.append("g")
+                                      .attr("transform", "translate(0," + heighthRef.current + ")")
+                                      .call(d3.axisBottom(xScaleRef.current));
+  
+    // Y axis: initialization
+    yScaleRef.current = d3.scaleLinear()
+                          .range([heighthRef.current, 0]);
+    yAxisRef.current = svgRef.current && svgRef.current.append("g");
+    
+  }
 
 
   return (
-    <div className={`Histogram `} id={id} ref={idRef}>
+    <div className="histogram-wrapper">
+      <div className={`Histogram `} id={id} ref={idRef}>
+      </div>
+      <p>
+        <label># bins</label>
+        <input type="number" min="1" max="100" step="30" value={nBins} onChange={(evt)=>setNBins(parseInt(evt.target.value))} id="nBin"/>
+      </p>
     </div>
+
   );
 }
 
